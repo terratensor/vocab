@@ -2,7 +2,10 @@ package tokenizer
 
 import (
 	"bufio"
+	"compress/gzip"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,13 +19,33 @@ import (
 type Tokenizer struct {
 	lowercase   bool
 	filterPunct bool
+	errorDir    string
+	logFile     *os.File
 }
 
-func NewTokenizer(lowercase, filterPunct bool) *Tokenizer {
+func NewTokenizer(lowercase, filterPunct bool) (*Tokenizer, error) {
+	// Создаем папку для ошибок
+	errorDir := "vocab_errors"
+	if err := os.MkdirAll(errorDir, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("failed to create error directory: %v", err)
+	}
+
+	// Создаем лог-файл
+	logFile, err := os.OpenFile(filepath.Join(errorDir, "vocab_errors.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create log file: %v", err)
+	}
+
 	return &Tokenizer{
 		lowercase:   lowercase,
 		filterPunct: filterPunct,
-	}
+		errorDir:    errorDir,
+		logFile:     logFile,
+	}, nil
+}
+
+func (t *Tokenizer) Close() {
+	t.logFile.Close()
 }
 
 func (t *Tokenizer) ProcessFiles(dirPath string, maxGoroutines int, outputFile string, sortType string) error {
@@ -52,15 +75,38 @@ func (t *Tokenizer) ProcessFiles(dirPath string, maxGoroutines int, outputFile s
 			defer func() { <-guard }()
 
 			filePath := filepath.Join(dirPath, fileEntry.Name())
+			var reader io.Reader
+
+			// Открываем файл
 			file, err := os.Open(filePath)
 			if err != nil {
-				fmt.Println("Error opening file:", err)
+				t.logError(fmt.Sprintf("Error opening file %s: %v", filePath, err))
+				t.copyErrorFile(filePath)
 				return
 			}
 			defer file.Close()
 
+			// Если файл в формате .gz, распаковываем его
+			if strings.HasSuffix(fileEntry.Name(), ".gz") {
+				gzReader, err := gzip.NewReader(file)
+				if err != nil {
+					t.logError(fmt.Sprintf("Error decompressing file %s: %v", filePath, err))
+					t.copyErrorFile(filePath)
+					return
+				}
+				defer gzReader.Close()
+				reader = gzReader
+			} else {
+				reader = file
+			}
+
+			// Обработка файла
 			localVocab := make(map[string]int)
-			scanner := bufio.NewScanner(file)
+
+			// Построчное чтение и токенизация
+			scanner := bufio.NewScanner(reader)
+			buf := make([]byte, 1<<20) // 1 МБ
+			scanner.Buffer(buf, 1<<20) // Устанавливаем максимальный размер токенаров
 			for scanner.Scan() {
 				line := scanner.Text()
 				tokens := segment.NewTokenizer().Tokenize(line)
@@ -74,6 +120,12 @@ func (t *Tokenizer) ProcessFiles(dirPath string, maxGoroutines int, outputFile s
 					}
 					localVocab[tokenText]++
 				}
+			}
+
+			if err := scanner.Err(); err != nil {
+				t.logError(fmt.Sprintf("Error reading file %s: %v", filePath, err))
+				t.copyErrorFile(filePath)
+				return
 			}
 
 			mutex.Lock()
@@ -99,6 +151,7 @@ func (t *Tokenizer) ProcessFiles(dirPath string, maxGoroutines int, outputFile s
 func (t *Tokenizer) saveVocabulary(vocab map[string]int, outputFile string, sortType string) error {
 	file, err := os.Create(outputFile)
 	if err != nil {
+		t.logError(fmt.Sprintf("Error creating output file %s: %v", outputFile, err))
 		return fmt.Errorf("error creating file: %v", err)
 	}
 	defer file.Close()
@@ -136,6 +189,32 @@ func (t *Tokenizer) saveVocabulary(vocab map[string]int, outputFile string, sort
 	}
 
 	return nil
+}
+
+func (t *Tokenizer) logError(message string) {
+	log.New(t.logFile, "", log.LstdFlags).Println(message)
+}
+
+func (t *Tokenizer) copyErrorFile(filePath string) {
+	srcFile, err := os.Open(filePath)
+	if err != nil {
+		t.logError(fmt.Sprintf("Error opening error file %s: %v", filePath, err))
+		return
+	}
+	defer srcFile.Close()
+
+	dstPath := filepath.Join(t.errorDir, filepath.Base(filePath))
+	dstFile, err := os.Create(dstPath)
+	if err != nil {
+		t.logError(fmt.Sprintf("Error creating error file copy %s: %v", dstPath, err))
+		return
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		t.logError(fmt.Sprintf("Error copying error file %s: %v", filePath, err))
+	}
 }
 
 func isPunctuation(token string) bool {

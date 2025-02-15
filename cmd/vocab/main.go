@@ -26,10 +26,15 @@ func main() {
 	}
 
 	// Создание токенизатора
-	tokenizer := tokenizer.NewTokenizer(*lowercase, *filterPunct)
+	tokenizer, err := tokenizer.NewTokenizer(*lowercase, *filterPunct)
+	if err != nil {
+		fmt.Println("Error:", err)
+		os.Exit(1)
+	}
+	defer tokenizer.Close()
 
 	// Обработка файлов
-	err := tokenizer.ProcessFiles(*dirPath, *maxGoroutines, *outputFile, *sortType)
+	err = tokenizer.ProcessFiles(*dirPath, *maxGoroutines, *outputFile, *sortType)
 	if err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)
