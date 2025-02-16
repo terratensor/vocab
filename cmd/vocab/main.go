@@ -7,6 +7,7 @@ import (
 	_ "net/http/pprof" // Импортируем pprof
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/terratensor/vocab/internal/tokenizer"
@@ -19,14 +20,15 @@ func main() {
 	filterPunct := flag.Bool("filter-punct", false, "Filter out punctuation tokens")
 	dirPath := flag.String("dir", "", "Path to the directory containing text files")
 	inputFile := flag.String("input", "", "Path to the input vocabulary file")
+	inputs := flag.String("inputs", "", "Comma-separated list of vocabulary files to merge")
 	outputFile := flag.String("output", "vocab_processed.txt", "Output file for the processed vocabulary")
 	maxGoroutines := flag.Int("max-goroutines", 0, "Maximum number of goroutines (default: number of CPUs)")
 	pprofFlag := flag.Bool("pprof", false, "Enable pprof profiling")
 	flag.Parse()
 
-	// Проверка, что указан либо dir, либо input
-	if *dirPath == "" && *inputFile == "" {
-		fmt.Println("Either -dir or -input must be specified.")
+	// Проверка, что указан хотя бы один из флагов: dir, input или inputs
+	if *dirPath == "" && *inputFile == "" && *inputs == "" {
+		fmt.Println("Either -dir, -input, or -inputs must be specified.")
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -76,13 +78,31 @@ func main() {
 		}
 
 		processedVocab := tokenizer.ProcessVocabulary(vocab)
-
 		err = tokenizer.SaveVocabulary(processedVocab, *outputFile, *sortType)
 		if err != nil {
 			fmt.Println("Error saving vocabulary:", err)
 			os.Exit(1)
 		}
 		fmt.Println("Processed vocabulary saved to", *outputFile)
+		return
+	}
+
+	// Сценарий 3: Объединение словарей
+	if *inputs != "" {
+		inputFiles := strings.Split(*inputs, ",")
+		vocab, err := tokenizer.MergeVocabularies(inputFiles)
+		if err != nil {
+			fmt.Println("Error merging vocabularies:", err)
+			os.Exit(1)
+		}
+
+		processedVocab := tokenizer.ProcessVocabulary(vocab)
+		err = tokenizer.SaveVocabulary(processedVocab, *outputFile, *sortType)
+		if err != nil {
+			fmt.Println("Error saving vocabulary:", err)
+			os.Exit(1)
+		}
+		fmt.Println("Merged vocabulary saved to", *outputFile)
 		return
 	}
 }
