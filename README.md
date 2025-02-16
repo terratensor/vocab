@@ -57,15 +57,34 @@ vocab -inputs=vocab1.txt,vocab2.txt,vocab3.txt -output=merged_vocab.txt -sort=fr
 ### Примеры использования:
 
 1. **Создание нового словаря**:
+
    ```bash
    go run main.go -dir=./files -output=vocab.txt -sort=freq -lowercase=true
    ```
+   
+   Если в корпусе есть следующие строки:
 
-2. **Обработка готового словаря**:
+   ```bash
+   Кружка-термос на 0.5л
+   Кружка-термос на 1л
+   Кружка-термос на 0.5л
+   ```
+
+   Словарь будет выглядеть так:
+
+   ```bash
+   Кружка-термос 3
+   на 3
+   0.5 2
+   л 3
+   1 1
+   ```
+   
+3. **Обработка готового словаря**:
    ```bash
    go run main.go -input=vocab.txt -output=vocab_processed.txt -sort=alpha -filter-punct=true
    ```
-3. **Объединение словарей**:
+4. **Объединение словарей**:
    ```bash
    go run main.go -inputs=vocab1.txt,vocab2.txt,vocab3.txt -output=merged_vocab.txt -sort=freq -lowercase=true
    ```
@@ -86,7 +105,7 @@ vocab -inputs=vocab1.txt,vocab2.txt,vocab3.txt -output=merged_vocab.txt -sort=fr
    Merged vocabulary saved to merged_vocab.txt
 
    ```
-4. **Профилирование**:
+5. **Профилирование**:
    ```bash
    go run main.go -dir=./files -output=vocab.txt -pprof=true
 
