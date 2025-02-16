@@ -48,6 +48,108 @@ func (t *Tokenizer) Close() {
 	t.logFile.Close()
 }
 
+// Загрузка словаря из файла
+func (t *Tokenizer) LoadVocabulary(filePath string) (map[string]int, error) {
+	vocab := make(map[string]int)
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening vocabulary file: %v", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.Split(line, " ")
+		if len(parts) != 2 {
+			continue // Пропускаем некорректные строки
+		}
+		token := parts[0]
+		count := 0
+		fmt.Sscanf(parts[1], "%d", &count)
+		vocab[token] = count
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading vocabulary file: %v", err)
+	}
+
+	return vocab, nil
+}
+
+// Обработка словаря (приведение к нижнему регистру, фильтрация пунктуации)
+func (t *Tokenizer) ProcessVocabulary(vocab map[string]int) map[string]int {
+	processedVocab := make(map[string]int)
+
+	for token, count := range vocab {
+		// Приведение к нижнему регистру
+		if t.lowercase {
+			token = strings.ToLower(token)
+		}
+
+		// Фильтрация пунктуации
+		if t.filterPunct && isPunctuation(token) {
+			continue
+		}
+
+		// Обновление словаря
+		processedVocab[token] += count
+	}
+
+	return processedVocab
+}
+
+// Сохранение словаря в файл с учетом сортировки
+func (t *Tokenizer) SaveVocabulary(vocab map[string]int, outputFile string, sortType string) error {
+	file, err := os.Create(outputFile)
+	if err != nil {
+		t.logError(fmt.Sprintf("Error creating output file %s: %v", outputFile, err))
+		return fmt.Errorf("error creating file: %v", err)
+	}
+	defer file.Close()
+
+	// Если сортировка не требуется, сохраняем словарь как есть
+	if sortType == "" {
+		for token, count := range vocab {
+			file.WriteString(fmt.Sprintf("%s %d\n", token, count))
+		}
+		return nil
+	}
+
+	// Преобразуем словарь в слайс для сортировки
+	type TokenFrequency struct {
+		Token string
+		Count int
+	}
+	var tokenFrequencies []TokenFrequency
+	for token, count := range vocab {
+		tokenFrequencies = append(tokenFrequencies, TokenFrequency{Token: token, Count: count})
+	}
+
+	// Сортировка
+	switch sortType {
+	case "freq":
+		log.Println("Sorting by frequency")
+		sort.Slice(tokenFrequencies, func(i, j int) bool {
+			return tokenFrequencies[i].Count > tokenFrequencies[j].Count
+		})
+	case "alpha":
+		log.Println("Sorting alphabetically")
+		sort.Slice(tokenFrequencies, func(i, j int) bool {
+			return tokenFrequencies[i].Token < tokenFrequencies[j].Token
+		})
+	}
+
+	// Записываем отсортированные данные в файл
+	for _, tf := range tokenFrequencies {
+		file.WriteString(fmt.Sprintf("%s %d\n", tf.Token, tf.Count))
+	}
+
+	return nil
+}
+
+// Обработка файлов и создание словаря
 func (t *Tokenizer) ProcessFiles(dirPath string, maxGoroutines int, outputFile string, sortType string) error {
 	var vocab = make(map[string]int)
 	var mutex sync.Mutex
@@ -102,11 +204,7 @@ func (t *Tokenizer) ProcessFiles(dirPath string, maxGoroutines int, outputFile s
 
 			// Обработка файла
 			localVocab := make(map[string]int)
-
-			// Построчное чтение и токенизация
 			scanner := bufio.NewScanner(reader)
-			buf := make([]byte, 1<<20) // 1 МБ
-			scanner.Buffer(buf, 1<<20) // Устанавливаем максимальный размер токенаров
 			for scanner.Scan() {
 				line := scanner.Text()
 				tokens := segment.NewTokenizer().Tokenize(line)
@@ -145,56 +243,15 @@ func (t *Tokenizer) ProcessFiles(dirPath string, maxGoroutines int, outputFile s
 	fmt.Println()
 
 	// Сохранение словаря
-	return t.saveVocabulary(vocab, outputFile, sortType)
+	return t.SaveVocabulary(vocab, outputFile, sortType)
 }
 
-func (t *Tokenizer) saveVocabulary(vocab map[string]int, outputFile string, sortType string) error {
-	file, err := os.Create(outputFile)
-	if err != nil {
-		t.logError(fmt.Sprintf("Error creating output file %s: %v", outputFile, err))
-		return fmt.Errorf("error creating file: %v", err)
-	}
-	defer file.Close()
-
-	if sortType != "" {
-		var tokenFrequencies []struct {
-			Token string
-			Count int
-		}
-		for token, count := range vocab {
-			tokenFrequencies = append(tokenFrequencies, struct {
-				Token string
-				Count int
-			}{Token: token, Count: count})
-		}
-
-		switch sortType {
-		case "freq":
-			sort.Slice(tokenFrequencies, func(i, j int) bool {
-				return tokenFrequencies[i].Count > tokenFrequencies[j].Count
-			})
-		case "alpha":
-			sort.Slice(tokenFrequencies, func(i, j int) bool {
-				return tokenFrequencies[i].Token < tokenFrequencies[j].Token
-			})
-		}
-
-		for _, tf := range tokenFrequencies {
-			file.WriteString(fmt.Sprintf("%s %d\n", tf.Token, tf.Count))
-		}
-	} else {
-		for token, count := range vocab {
-			file.WriteString(fmt.Sprintf("%s %d\n", token, count))
-		}
-	}
-
-	return nil
-}
-
+// Логирование ошибок
 func (t *Tokenizer) logError(message string) {
 	log.New(t.logFile, "", log.LstdFlags).Println(message)
 }
 
+// Копирование проблемных файлов
 func (t *Tokenizer) copyErrorFile(filePath string) {
 	srcFile, err := os.Open(filePath)
 	if err != nil {
@@ -217,6 +274,7 @@ func (t *Tokenizer) copyErrorFile(filePath string) {
 	}
 }
 
+// Проверка, является ли токен знаком препинания
 func isPunctuation(token string) bool {
 	for _, r := range token {
 		if !unicode.IsPunct(r) && !unicode.IsSymbol(r) {

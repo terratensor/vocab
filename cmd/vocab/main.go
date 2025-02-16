@@ -17,11 +17,19 @@ func main() {
 	sortType := flag.String("sort", "", "Sort vocabulary by frequency (freq) or alphabetically (alpha)")
 	lowercase := flag.Bool("lowercase", false, "Convert tokens to lowercase")
 	filterPunct := flag.Bool("filter-punct", false, "Filter out punctuation tokens")
-	dirPath := flag.String("dir", "./files", "Path to the directory containing text files")
+	dirPath := flag.String("dir", "", "Path to the directory containing text files")
+	inputFile := flag.String("input", "", "Path to the input vocabulary file")
+	outputFile := flag.String("output", "vocab_processed.txt", "Output file for the processed vocabulary")
 	maxGoroutines := flag.Int("max-goroutines", 0, "Maximum number of goroutines (default: number of CPUs)")
-	outputFile := flag.String("output", "vocab.txt", "Output file for the vocabulary")
 	pprofFlag := flag.Bool("pprof", false, "Enable pprof profiling")
 	flag.Parse()
+
+	// Проверка, что указан либо dir, либо input
+	if *dirPath == "" && *inputFile == "" {
+		fmt.Println("Either -dir or -input must be specified.")
+		flag.Usage()
+		os.Exit(1)
+	}
 
 	// Если maxGoroutines не указан, используем количество процессоров
 	if *maxGoroutines <= 0 {
@@ -48,12 +56,33 @@ func main() {
 	}
 	defer tokenizer.Close()
 
-	// Обработка файлов
-	err = tokenizer.ProcessFiles(*dirPath, *maxGoroutines, *outputFile, *sortType)
-	if err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
+	// Сценарий 1: Создание нового словаря из файлов в директории
+	if *dirPath != "" {
+		err = tokenizer.ProcessFiles(*dirPath, *maxGoroutines, *outputFile, *sortType)
+		if err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+		}
+		fmt.Println("Vocabulary saved to", *outputFile)
+		return
 	}
 
-	fmt.Println("Vocabulary saved to", *outputFile)
+	// Сценарий 2: Обработка готового словаря
+	if *inputFile != "" {
+		vocab, err := tokenizer.LoadVocabulary(*inputFile)
+		if err != nil {
+			fmt.Println("Error loading vocabulary:", err)
+			os.Exit(1)
+		}
+
+		processedVocab := tokenizer.ProcessVocabulary(vocab)
+
+		err = tokenizer.SaveVocabulary(processedVocab, *outputFile, *sortType)
+		if err != nil {
+			fmt.Println("Error saving vocabulary:", err)
+			os.Exit(1)
+		}
+		fmt.Println("Processed vocabulary saved to", *outputFile)
+		return
+	}
 }
