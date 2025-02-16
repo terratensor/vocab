@@ -29,10 +29,20 @@ vocab -dir=/path/to/files -output=vocab.txt -sort=freq -lowercase=true -filter-p
 vocab -input=vocab.txt -output=vocab_processed.txt -sort=freq -lowercase=true -filter-punct=true
 ```
 
+### Сценарий 3: Объединение словарей
+
+Объединяет несколько словарей из файлов в один, применяя все доступные функции (сортировка, фильтрация, приведение к нижнему регистру).
+
+#### Пример:
+```bash
+vocab -inputs=vocab1.txt,vocab2.txt,vocab3.txt -output=merged_vocab.txt -sort=freq -lowercase=true
+```
+
 ### Флаги
 
 - `-dir`: Путь к директории с текстовыми файлами (по умолчанию: не указан).
 - `-input`: Путь к файлу с уже сформированным словарем (по умолчанию: не указан).
+- `-inputs`: Список файлов словарей через запятую (например, `vocab1.txt,vocab2.txt`).
 - `-output`: Имя выходного файла (по умолчанию: `vocab.txt`).
 - `-sort`: Тип сортировки (`freq` для частоты, `alpha` для алфавитной сортировки).
 - `-lowercase`: Приводить токены к нижнему регистру (по умолчанию: `false`).
@@ -55,14 +65,15 @@ vocab -input=vocab.txt -output=vocab_processed.txt -sort=freq -lowercase=true -f
    ```bash
    go run main.go -input=vocab.txt -output=vocab_processed.txt -sort=alpha -filter-punct=true
    ```
-
-3. **Профилирование**:
+3. **Объединение словарей**:
+   ```bash
+   go run main.go -inputs=vocab1.txt,vocab2.txt -output=merged_vocab.txt -sort=freq -lowercase=true
+   ```
+4. **Профилирование**:
    ```bash
    go run main.go -dir=./files -output=vocab.txt -pprof=true
 
    ```
-
-
 
 ### Как это работает:
 
@@ -75,7 +86,12 @@ vocab -input=vocab.txt -output=vocab_processed.txt -sort=freq -lowercase=true -f
    - Применяются операции: приведение к нижнему регистру, удаление пунктуации, сортировка.
    - Результат сохраняется в новый файл.
 
-3. **Профилирование**:
+3. **Сценарий 3: Объединение словарей**:
+   - Если указан флаг `-inputs`, программа объединяет несколько словарей из файлов.
+   - Используются все текущие функции: токенизация, фильтрация, сортировка и т.д.
+   - Результат сохраняется в новый файл.
+
+4. **Профилирование**:
    - Если включен флаг `-pprof`, программа запускает HTTP-сервер для сбора данных профилирования.
 
 ---

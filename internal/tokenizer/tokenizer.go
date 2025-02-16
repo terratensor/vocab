@@ -78,6 +78,25 @@ func (t *Tokenizer) LoadVocabulary(filePath string) (map[string]int, error) {
 	return vocab, nil
 }
 
+// Объединение словарей из нескольких файлов
+func (t *Tokenizer) MergeVocabularies(filePaths []string) (map[string]int, error) {
+	mergedVocab := make(map[string]int)
+
+	for _, filePath := range filePaths {
+		vocab, err := t.LoadVocabulary(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("error loading vocabulary from %s: %v", filePath, err)
+		}
+
+		// Объединяем словари
+		for token, count := range vocab {
+			mergedVocab[token] += count
+		}
+	}
+
+	return mergedVocab, nil
+}
+
 // Обработка словаря (приведение к нижнему регистру, фильтрация пунктуации)
 func (t *Tokenizer) ProcessVocabulary(vocab map[string]int) map[string]int {
 	processedVocab := make(map[string]int)
