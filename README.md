@@ -73,7 +73,7 @@ vocab -inputs=vocab1.txt,vocab2.txt,vocab3.txt -output=merged_vocab.txt -sort=fr
    Словарь будет выглядеть так:
 
    ```bash
-   Кружка-термос 3
+   кружка-термос 3
    на 3
    0.5 2
    л 3
