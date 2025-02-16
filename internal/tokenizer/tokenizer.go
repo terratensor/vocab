@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 
 	"github.com/terratensor/segment"
@@ -82,7 +83,11 @@ func (t *Tokenizer) LoadVocabulary(filePath string) (map[string]int, error) {
 func (t *Tokenizer) MergeVocabularies(filePaths []string) (map[string]int, error) {
 	mergedVocab := make(map[string]int)
 
-	for _, filePath := range filePaths {
+	fmt.Println("Starting to merge vocabularies...")
+	totalFiles := len(filePaths)
+
+	for i, filePath := range filePaths {
+		fmt.Printf("\rReading and merging file %d/%d: %s", i+1, totalFiles, filePath)
 		vocab, err := t.LoadVocabulary(filePath)
 		if err != nil {
 			return nil, fmt.Errorf("error loading vocabulary from %s: %v", filePath, err)
@@ -93,13 +98,22 @@ func (t *Tokenizer) MergeVocabularies(filePaths []string) (map[string]int, error
 			mergedVocab[token] += count
 		}
 	}
+	fmt.Println("\nMerging completed.")
 
 	return mergedVocab, nil
 }
 
 // Обработка словаря (приведение к нижнему регистру, фильтрация пунктуации)
 func (t *Tokenizer) ProcessVocabulary(vocab map[string]int) map[string]int {
+	fmt.Println("Processing vocabulary...")
 	processedVocab := make(map[string]int)
+	totalTokens := len(vocab)
+	processedTokens := 0
+	progressStep := totalTokens / 100 // Шаг для вывода прогресса (1%)
+
+	if progressStep == 0 {
+		progressStep = 1 // Минимальный шаг
+	}
 
 	for token, count := range vocab {
 		// Приведение к нижнему регистру
@@ -114,13 +128,24 @@ func (t *Tokenizer) ProcessVocabulary(vocab map[string]int) map[string]int {
 
 		// Обновление словаря
 		processedVocab[token] += count
+		processedTokens++
+
+		// Вывод прогресса с шагом
+		if processedTokens%progressStep == 0 {
+			fmt.Printf("\rProcessed %d/%d tokens (%d%%)", processedTokens, totalTokens, processedTokens*100/totalTokens)
+		}
 	}
+
+	// Финальный вывод прогресса
+	fmt.Printf("\rProcessed %d/%d tokens (100%%)\n", totalTokens, totalTokens)
+	fmt.Println("Processing completed.")
 
 	return processedVocab
 }
 
 // Сохранение словаря в файл с учетом сортировки
 func (t *Tokenizer) SaveVocabulary(vocab map[string]int, outputFile string, sortType string) error {
+	fmt.Println("Saving vocabulary...")
 	file, err := os.Create(outputFile)
 	if err != nil {
 		t.logError(fmt.Sprintf("Error creating output file %s: %v", outputFile, err))
@@ -130,9 +155,27 @@ func (t *Tokenizer) SaveVocabulary(vocab map[string]int, outputFile string, sort
 
 	// Если сортировка не требуется, сохраняем словарь как есть
 	if sortType == "" {
+		totalTokens := len(vocab)
+		savedTokens := 0
+		progressStep := totalTokens / 100 // Шаг для вывода прогресса (1%)
+
+		if progressStep == 0 {
+			progressStep = 1 // Минимальный шаг
+		}
+
 		for token, count := range vocab {
 			file.WriteString(fmt.Sprintf("%s %d\n", token, count))
+			savedTokens++
+
+			// Вывод прогресса с шагом
+			if savedTokens%progressStep == 0 {
+				fmt.Printf("\rSaved %d/%d tokens (%d%%)", savedTokens, totalTokens, savedTokens*100/totalTokens)
+			}
 		}
+
+		// Финальный вывод прогресса
+		fmt.Printf("\rSaved %d/%d tokens (100%%)\n", totalTokens, totalTokens)
+		fmt.Println("Saving completed.")
 		return nil
 	}
 
@@ -147,23 +190,42 @@ func (t *Tokenizer) SaveVocabulary(vocab map[string]int, outputFile string, sort
 	}
 
 	// Сортировка
+	fmt.Println("Sorting vocabulary...")
+	startTime := time.Now()
 	switch sortType {
 	case "freq":
-		log.Println("Sorting by frequency")
 		sort.Slice(tokenFrequencies, func(i, j int) bool {
 			return tokenFrequencies[i].Count > tokenFrequencies[j].Count
 		})
 	case "alpha":
-		log.Println("Sorting alphabetically")
 		sort.Slice(tokenFrequencies, func(i, j int) bool {
 			return tokenFrequencies[i].Token < tokenFrequencies[j].Token
 		})
 	}
+	fmt.Printf("Sorting completed in %v.\n", time.Since(startTime))
 
 	// Записываем отсортированные данные в файл
+	totalTokens := len(tokenFrequencies)
+	savedTokens := 0
+	progressStep := totalTokens / 100 // Шаг для вывода прогресса (1%)
+
+	if progressStep == 0 {
+		progressStep = 1 // Минимальный шаг
+	}
+
 	for _, tf := range tokenFrequencies {
 		file.WriteString(fmt.Sprintf("%s %d\n", tf.Token, tf.Count))
+		savedTokens++
+
+		// Вывод прогресса с шагом
+		if savedTokens%progressStep == 0 {
+			fmt.Printf("\rSaved %d/%d tokens (%d%%)", savedTokens, totalTokens, savedTokens*100/totalTokens)
+		}
 	}
+
+	// Финальный вывод прогресса
+	fmt.Printf("\rSaved %d/%d tokens (100%%)\n", totalTokens, totalTokens)
+	fmt.Println("Saving completed.")
 
 	return nil
 }

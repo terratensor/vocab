@@ -67,7 +67,24 @@ vocab -inputs=vocab1.txt,vocab2.txt,vocab3.txt -output=merged_vocab.txt -sort=fr
    ```
 3. **Объединение словарей**:
    ```bash
-   go run main.go -inputs=vocab1.txt,vocab2.txt -output=merged_vocab.txt -sort=freq -lowercase=true
+   go run main.go -inputs=vocab1.txt,vocab2.txt,vocab3.txt -output=merged_vocab.txt -sort=freq -lowercase=true
+   ```
+   Вывод:
+   ```bash
+   Using 6 goroutines (number of CPUs)
+   Starting to merge vocabularies...
+   Reading and merging file 3/3: vocab3.txt
+   Merging completed.
+   Processing vocabulary...
+   Processed 10977211/10977211 tokens (100%)
+   Processing completed.
+   Saving vocabulary...
+   Sorting vocabulary...
+   Sorting completed in 416.1916ms.
+   Saved 10977211/10977211 tokens (100%)
+   Saving completed.
+   Merged vocabulary saved to merged_vocab.txt
+
    ```
 4. **Профилирование**:
    ```bash
